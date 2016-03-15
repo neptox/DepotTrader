@@ -1,0 +1,101 @@
+contract DepotTrader
+{
+    struct depot
+    {
+        string info;
+        uint timeAt;
+        
+        address seller;
+        address customer;
+        uint sellerDeposit;
+        uint customerDeposit;
+        bool customerConfirmed;
+        uint sellerPayout;
+        uint customerPayout;
+        
+    }
+    mapping(uint=>depot) public Depots; 
+    uint depotCount;
+    
+    
+    function newSellerDepot() returns (uint depotId)
+    {
+        depotId = depotCount++;
+        Depots[depotId].seller = msg.sender;
+        Depots[depotId].sellerDeposit = msg.value;
+        Depots[depotId].timeAt = block.number;
+    }
+    function CustomerDeposit(uint depotId)
+    {
+        depot d = Depots[depotId];
+        if(d.sellerDeposit > 0 && d.customerDeposit == 0 && msg.value >= 2*(d.sellerDeposit))
+        {
+            d.customer = msg.sender;
+            d.customerDeposit = msg.value;
+        }
+    }
+    
+    function CustomerConfirm(uint depotId) returns (bool done)
+    {
+        depot d = Depots[depotId];
+        
+        if((msg.sender == d.customer) && d.customerDeposit >= 2*(d.sellerDeposit))
+        {
+            d.customerPayout = d.sellerDeposit;
+            d.sellerPayout = d.customerDeposit;
+            
+            d.customer.send(d.customerPayout);
+            d.seller.send(d.sellerPayout);
+            clean(depotId);
+            d.customerConfirmed = true;
+            d.info = "trade successfull";
+            return true;
+        }
+        return false;
+    } 
+    
+    function repay(uint depotId) returns (bool done)
+    {
+        depot d = Depots[depotId];
+        
+        if((msg.sender == d.customer || msg.sender == d.seller) && d.customerDeposit < 2*(d.sellerDeposit))
+        {
+            d.sellerPayout = d.sellerDeposit;
+            d.customerPayout = d.customerDeposit;
+            
+            d.customer.send(d.customerPayout);
+            d.seller.send(d.sellerPayout);
+            clean(depotId);
+            d.info = "depot emptied, deposit refundet.";
+            return true;
+        }
+    return false;
+    }
+    
+    function heatUp(uint depotId)
+    {
+        depot d = Depots[depotId];
+        uint duration = (block.number - d.timeAt);
+        
+        if(d.customerConfirmed == false && d.customerDeposit >= 2*(d.sellerDeposit))
+        {
+            d.sellerPayout = (d.sellerDeposit-(duration*1000000000000));
+            d.customerPayout = (d.customerDeposit-(duration*1000000000000));
+        }
+    }
+    
+    
+    //internal functions
+
+    function clean(uint id) private
+    {
+        depot d = Depots[id];
+        d.customer = 0;
+        d.seller = 0;
+        d.sellerDeposit = 0;
+        d.customerDeposit = 0;
+        d.sellerPayout = 0;
+        d.customerPayout = 0;
+    }
+    
+}
